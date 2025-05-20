@@ -92,25 +92,63 @@ class PasswordStrengthApp(ctk.CTk):
 
     def analyze_password(self):
         password = self.password_entry.get()
+        from password_strength_model import sklearn_model, lstm_model
+        if sklearn_model is not None:
+            print("Analiz yöntemi: scikit-learn (makine öğrenmesi)")
+        elif lstm_model is not None:
+            print("Analiz yöntemi: LSTM (derin öğrenme)")
+        else:
+            print("Analiz yöntemi: brute-force (dummy hesaplama)")
         crack_time = estimate_crack_time(password)
-        self.result_label.configure(text=f"Tahmini kırılma süresi: {format_time(crack_time)}")
+        # Sonucun türüne göre uygun mesajı göster
+        if isinstance(crack_time, (int, float)):
+            result_text = f"Tahmini kırılma süresi: {format_time(crack_time)}"
+        else:
+            result_text = f"Parola gücü: {crack_time}"
+        self.result_label.configure(text=result_text)
         self.show_graph(crack_time)
 
     def show_graph(self, crack_time):
         for widget in self.canvas_frame.winfo_children():
             widget.destroy()
-        fig, ax = plt.subplots(figsize=(4,2))
-        times = [1, 60, 3600, 86400, 31536000, crack_time]
-        labels = ["1 sn", "1 dk", "1 sa", "1 gün", "1 yıl", "Parolanız"]
-        ax.bar(labels, times, color=["grey"]*5 + ["blue"])
-        ax.set_yscale('log')
-        ax.set_ylabel("Saniye (log ölçek)")
-        ax.set_title("Kırılma Süresi Karşılaştırması")
-        fig.tight_layout()
-        canvas = FigureCanvasTkAgg(fig, master=self.canvas_frame)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill="both", expand=True)
-        plt.close(fig)
+        # Sadece sayı ise kırılma süresi grafiği çiz
+        if isinstance(crack_time, (int, float)):
+            fig, ax = plt.subplots(figsize=(5,2.5))
+            # Kırılma süresini farklı zaman dilimleriyle karşılaştır
+            times = [1, 60, 3600, 86400, 31536000, crack_time]
+            labels = ["1 sn", "1 dk", "1 sa", "1 gün", "1 yıl", "Parolanız"]
+            colors = ["grey"]*5 + ["blue"]
+            ax.bar(labels, times, color=colors)
+            ax.set_yscale('log')
+            ax.set_ylabel("Tahmini Kırılma Süresi (saniye, log ölçek)")
+            ax.set_title("Parolanızın Tahmini Kırılma Süresi")
+            # Parolanın kırılma süresini üstte göster
+            ax.text(len(labels)-1, times[-1], format_time(crack_time), ha='center', va='bottom', color='blue', fontweight='bold')
+            fig.tight_layout()
+            canvas = FigureCanvasTkAgg(fig, master=self.canvas_frame)
+            canvas.draw()
+            canvas.get_tk_widget().pack(fill="both", expand=True)
+            plt.close(fig)
+        else:
+            # Sınıf etiketi için görsel grafik (weak/medium/strong)
+            fig, ax = plt.subplots(figsize=(4,2))
+            classes = ["weak", "medium", "strong"]
+            values = [0.5 if crack_time == c else 0.1 for c in classes]
+            colors = ["red" if crack_time == "weak" else "grey",
+                      "orange" if crack_time == "medium" else "grey",
+                      "green" if crack_time == "strong" else "grey"]
+            ax.bar(classes, values, color=colors)
+            ax.set_ylim(0, 1)
+            ax.set_ylabel("Güç Skoru (görsel)")
+            ax.set_title("Parola Gücü Sınıfı")
+            for i, v in enumerate(values):
+                if v > 0.1:
+                    ax.text(i, v + 0.05, crack_time.upper(), ha='center', fontweight='bold')
+            fig.tight_layout()
+            canvas = FigureCanvasTkAgg(fig, master=self.canvas_frame)
+            canvas.draw()
+            canvas.get_tk_widget().pack(fill="both", expand=True)
+            plt.close(fig)
 
     def create_password(self):
         length = int(self.length_var.get())
